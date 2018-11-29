@@ -148,12 +148,15 @@ public class Elevator : MonoBehaviour
     {
         fsm.AddStateTransition(State.Ready, Event.Call, State.Accelate);
         fsm.AddStateTransition(State.Ready, Event.Arrived, State.DoorOpening);
+        fsm.AddStateTransition(State.Ready, Event.DoorOpenRequest, State.DoorOpening);
+
         fsm.AddStateTransition(State.Accelate, Event.AccelateEnd, State.NormalMove);
         fsm.AddStateTransition(State.NormalMove, Event.DecelerateStart, State.Decelerate);
         fsm.AddStateTransition(State.Decelerate, Event.Arrived, State.MoveStop);
 
         fsm.AddStateTransition(State.MoveStop, Event.DoorOpenRequest, State.DoorOpening);
         fsm.AddStateTransition(State.MoveStop, Event.EmptyPassinger, State.Ready);
+        fsm.AddStateTransition(State.MoveStop, Event.DoorCloseEnd, State.Accelate);
 
         fsm.AddStateTransition(State.DoorOpening, Event.DoorOpenEnd, State.DoorOpened);
         fsm.AddStateTransition(State.DoorOpened, Event.DoorCloseStart, State.DoorClosing);
@@ -307,16 +310,12 @@ public class Elevator : MonoBehaviour
 
     }
 
-
-
-    // to be implemented by the developer
-    public  void  AgentAction(float[] vectorAction, string textAction,out float reward)
+    public void AgentThreeAction(float[] vectorAction, string textAction,out float reward)
     {
-
         reward = 0f;
         reward += -0.01f;
         recv_action = (MOVE_STATE)Mathf.FloorToInt(vectorAction[0]);
- 
+
         int floor, nextfloor;
         GetFloor(out floor, out nextfloor);
 
@@ -325,43 +324,43 @@ public class Elevator : MonoBehaviour
         switch (recv_action)
         {
             case MOVE_STATE.Stop:
-               
-                if(fsm.GetCurrentState() == State.NormalMove)
+
+                if (fsm.GetCurrentState() == State.NormalMove)
                 {
                     int lllll = 0;
 
-                    if(listPassinger.Count ==0&&f.listPassinger.Count>0)
+                    if (listPassinger.Count == 0 && f.listPassinger.Count > 0)
                     {
                         reward += 0.1f;
                     }
-                    else if (listPassinger.Count == 0 && f.listPassinger.Count ==0)
+                    else if (listPassinger.Count == 0 && f.listPassinger.Count == 0)
                     {
-                        reward +=-0.05f;
+                        reward += -0.05f;
                     }
                 }
                 else if (fsm.GetCurrentState() == State.Ready)
-                {                    
-                    while (true&& f.listPassinger.Count>0)
+                {
+                    while (true && f.listPassinger.Count > 0)
                     {
                         MOVE_STATE dir = (MOVE_STATE)Random.Range((int)MOVE_STATE.Down, (int)MOVE_STATE.end);
 
-                        if(f.IsCallRequest(dir))
+                        if (f.IsCallRequest(dir))
                         {
                             fsm.StateTransition(Event.Arrived);
                             SetDirction(dir);
-                            return ;
+                            return;
                         }
-                    }           
+                    }
                 }
-                
+
                 fsm.StateTransition(Event.DecelerateStart);
                 return;
-                
+
 
             case MOVE_STATE.Down:
-                if(GetMoveState() != recv_action)
+                if (GetMoveState() != recv_action)
                 {
-                    if(currentMoveSpeed>0.0f)  //이동
+                    if (currentMoveSpeed > 0.0f)  //이동
                     {
                         reward += -0.01f;
                         return;
@@ -372,7 +371,7 @@ public class Elevator : MonoBehaviour
                 {
                     SetDirction(MOVE_STATE.Up);
                     reward += -0.05f;
-                   
+
                 }
 
                 if (floorBtnflag[nextfloor])
@@ -389,11 +388,11 @@ public class Elevator : MonoBehaviour
                 break;
 
             case MOVE_STATE.Up:
-               if (GetMoveState() != recv_action)
+                if (GetMoveState() != recv_action)
                 {
                     if (currentMoveSpeed > 0.0f)  //이동
                     {
-                       
+
                         reward += -0.01f;
                         return;
                     }
@@ -404,7 +403,7 @@ public class Elevator : MonoBehaviour
 
                     SetDirction(MOVE_STATE.Down);
                     reward += -0.05f;
-                   
+
                     //fsm.StateTransition(Event.Arrived);
                     // return;
 
@@ -419,13 +418,58 @@ public class Elevator : MonoBehaviour
 
                 SetDirction(recv_action);
                 fsm.StateTransition(Event.Call);
-               
+
                 SetDirction(recv_action);
                 fsm.StateTransition(Event.Call);
                 break;
         }
 
+    }
 
+    public void AgentStopFloor(float[] vectorAction, string textAction, out float reward)
+    {
+        int floor = (int)vectorAction[0];
+
+
+        requestFloor = floor;   ///층을 배열 인덱스로 접근하기 때문에 -1를 해준다..
+
+        int currentFloor = (int)GetFloor();
+
+        if (fsm.GetCurrentState() == State.Ready)
+        {
+            if (requestFloor == currentFloor)
+            {
+                fsm.StateTransition(Event.DoorOpenRequest);
+                requestFloor = -1;
+                
+            }
+
+
+            if (requestFloor > currentFloor)
+                SetDirction(MOVE_STATE.Up);
+            else
+                SetDirction(MOVE_STATE.Down);
+
+            fsm.StateTransition(Event.Call);
+
+        }
+
+        reward = 0;
+
+    }
+
+
+
+    // to be implemented by the developer
+    public  void  AgentAction(float[] vectorAction, string textAction,out float reward)
+    {
+
+        if (ElevatorAcademy.actionTofloor > 0)
+            AgentStopFloor(vectorAction, textAction,out reward);
+        else
+            AgentThreeAction(vectorAction, textAction,out reward);
+
+      
     }
 
 
@@ -693,21 +737,22 @@ public class Elevator : MonoBehaviour
 
         float dist = listFloor[nextfloor].transform.position.y - car.transform.position.y;
 
-        if(Mathf.Abs(dist)< currentMoveSpeed*Time.fixedDeltaTime)
+        if (Mathf.Abs(dist) <= currentMoveSpeed * Time.fixedDeltaTime || Mathf.Abs(dist) < 0.09f)
         {
             car.transform.position = new Vector3(car.transform.position.x, listFloor[nextfloor].transform.position.y, car.transform.position.z);
 
             currentFloor = (car.transform.localPosition.y / ElevatorAcademy.height);
             fsm.StateTransition(Event.Arrived);
-           
+
             currentMoveSpeed = 0;
             return;
         }
 
-        if (currentMoveSpeed < 0.3)
+        if (currentMoveSpeed < 0.65)
             return;
 
         currentMoveSpeed -= Time.fixedDeltaTime * ElevatorAcademy.decelerate;
+
 
     }
 
@@ -718,20 +763,39 @@ public class Elevator : MonoBehaviour
 
         var f = building.GetFloor(floor);
 
-        if (floorBtnflag[floor] ||f.IsCallRequest(GetMoveState()))
+
+        if (floorBtnflag[floor] || f.IsCallRequest(GetMoveState()))
         {
             fsm.StateTransition(Event.DoorOpenRequest);
         }
-        else if(listPassinger.Count==0)
-        {      
+        else if (listPassinger.Count == 0 && f.listPassinger.Count > 0)
+        {
+
+            if (GetMoveState() == MOVE_STATE.Down)
+            {
+                moveDirState = MOVE_STATE.Up;
+            }
+            else
+            {
+                moveDirState = MOVE_STATE.Down;
+            }
+
+            fsm.StateTransition(Event.DoorOpenRequest);
+        }
+        else if (listPassinger.Count == 0 && f.listPassinger.Count == 0)
+        {
             fsm.StateTransition(Event.EmptyPassinger);
         }
         else
         {
-            fsm.StateTransition(Event.DoorOpenRequest);
+            fsm.StateTransition(Event.DoorCloseEnd);
         }
 
         SetFloorButton(floor, false);
+
+
+        if (requestFloor == floor)
+            requestFloor = -1;
 
     }
 

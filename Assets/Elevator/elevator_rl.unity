@@ -418,6 +418,8 @@ MonoBehaviour:
       value: 1
     - key: capacity
       value: 15
+    - key: actionTofloor
+      value: 0
 --- !u!4 &757519307
 Transform:
   m_ObjectHideFlags: 0

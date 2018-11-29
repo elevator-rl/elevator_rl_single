@@ -20,7 +20,7 @@ public class ElevatorAcademy : Academy
     public static float close;
     public static float turn;
     public static int capacity;
-
+    public static int actionTofloor;
 
 
     void Start ()
@@ -51,7 +51,8 @@ public class ElevatorAcademy : Academy
         close = resetParameters["close"];
         turn = resetParameters["turn"];
         capacity = (int)resetParameters["capacity"];
-
+        actionTofloor = (int)resetParameters["actionTofloor"];
+        
 
 
 
